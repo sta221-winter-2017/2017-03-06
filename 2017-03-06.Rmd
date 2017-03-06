@@ -1,0 +1,222 @@
+---
+title: "STA221"
+author: "Neil Montgomery"
+date: "Last edited: `r format(Sys.time(), '%Y-%m-%d %H:%M')`"
+output: 
+  beamer_presentation:
+    keep_tex: TRUE
+    incremental: TRUE
+#    df_print: tibble
+    fig_caption: FALSE
+classoption: aspectratio=169
+header-includes:
+- \newcommand{\ve}{\varepsilon}
+- \newcommand{\dbar}[1]{\overline{\overline{#1}}}
+---
+
+```{r setup, include=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message=FALSE,
+                      dev='pdf', fig.width=5, fig.asp=0.618, fig.align='center')
+options(tibble.width=70, scipen = 999, tibble.print_min=5, show.signif.stars = FALSE)
+library(tidyverse)
+library(readxl)
+source("multiplot.R")
+```
+
+
+## the $F$ distributions
+
+Call:
+$$MS_T = \frac{SS_T}{k-1} \qquad \text{ and } \qquad MS_E = \frac{SSE}{N-k}$$
+
+\pause These are called "mean squares", and the ratio of mean squares will follow what is called an $F$ distribution, with $k-1$ and $N-k$ "degrees of freedom".
+
+\pause When the null hypothesis is true, $\frac{MS_T}{MS_E}$ lives near 1, and large values of this ratio give small p-values.
+
+## putting it all together
+
+All this information is concisely displayed in what is called the "analysis of variance" table (or ANOVA table, or AOV table). Here's the table for the Yeast example:
+
+```{r, fig.width=3, fig.align='center'}
+yeast <- read.csv("Ch28_Activating_yeast.csv")
+yeast %>% 
+  ggplot(aes(x=Recipe, y=Activation.Times)) + geom_boxplot()
+yeast %>% 
+  aov(Activation.Times ~ Recipe, data = .) %>% 
+  summary
+```
+
+## putting it all together
+
+And for the "probably not different" Frisbee example:
+
+```{r, fig.width=3, fig.align='center'}
+frisbee <- read.csv("Ch28_Frisbee_throws.csv")
+frisbee %>% 
+  ggplot(aes(x=Grip, y=Distance)) + geom_boxplot()
+frisbee %>% 
+  aov(Distance ~ Grip, data = .) %>% 
+  summary
+```
+
+## ANOVA table---formula version
+
+Not explicitly appearing on the `R` output is $SS_{Total} = SS_T + SS_E$ and $N - 1$ = $k-1$ + $N-k$.
+
+\begin{table}[ht]
+\begin{tabular}{lrrrrr}
+ & \texttt{Df} & \texttt{Sum Sq} & \texttt{Mean Sq} & \texttt{F value} & \texttt{Pr(>F)}\\
+ <var\_name> & \onslide<2->{$k-1$} & \onslide<3->{$SS_T$} & \onslide<4->{$MS_T = \frac{SS_T}{(k-1)}$} & \onslide<5->{$F_{obs} = \frac{MS_T}{MS_E}$} & 
+\onslide<6->{$P(F_{k-1,N-k} \ge F_{obs})$}\\
+ \texttt{Residuals} & \onslide<2->{$N-k$} & \onslide<3->{$SS_E$} & \onslide<4->{$MS_E = \frac{SS_E}{(N-k)}$} & &
+\end{tabular}
+\end{table}
+
+\pause \pause \pause \pause \pause \pause For example (from 25.13 "Hearing"). Four different word lists were compared for ease of hearing with background noise. 96 people were divided into four groups and the number out of 24 words understood was recorded.
+
+\pause The sample variance for all 96 people was `r 6658.6250/95`. The mean squared error was 62.371. Is there a difference between the word groups?
+
+## the $t$ - $F$ connection - I
+
+Any time you've done a $t$ test, you could have done a (slightly inferior) $F$ test.
+
+\pause That's because the square of anything with a $t_{\nu}$ distribution always has an $F_{1,\nu}$ distribution.
+
+\pause For example, consider the two-sample $t$ test (equal variance version using pooled variance $s^2_p$ - section 21.3 of the text). 
+
+Q21.20 "Hard Water" Mortality rates per county in 61 counties in England and Wales classified as "North" and "South" of Derby. Is there a difference in mean mortality rate? Here's the `R` output:
+
+```{r}
+mort <- read.csv("Ch24_Hard_water_Derby.csv")
+mort %>% 
+  t.test(Mortality ~ Derby, data=., var.equal=TRUE)
+```
+
+## mortality data via $F$ test
+
+From above:
+
+`t = 6.5312, df = 59, p-value = 0.00000001673`
+
+The `R` ANOVA output:
+
+```{r}
+mort %>% 
+  aov(Mortality ~ Derby, data=.) %>% summary
+```
+
+\pause Also, $6.5312^2 = `r 6.5312^2`$.
+
+## the $t$ - $F$ connection - II
+
+Recall from the `Bodyfat` example from regression:
+
+```{r}
+library(rio)
+bodyfat <- import("Body_fat.csv")
+bodyfat %>% 
+  lm(`Pct BF` ~ Height, data = .) %>% summary %>% short_print_lm()
+```
+
+\pause Again, $t^2 = F$ and the p-values are identical.
+
+\pause The practical downside of using $F$ is that you lose information about the sign. 
+
+## ANOVA model and calculations requirement
+
+Look at the model again:
+$$y_{ij} = \mu_i + \varepsilon_{ij}, \quad \ve_{ij} \sim N(0,\sigma)$$
+First, the errors are supposed to be independent, which would exclude experiments such as giving the same person different treatments over time, etc.
+
+\pause The main things to verify:
+
+1. Do the groups come from a distribution with the same variance? (fatal if no)
+
+2. Do the groups come from normal distributions? (OK if sample size is large enough)
+
+## Formal test for equality of variances
+
+For the equal variance assumptions, the book says to look at plots. Other books gives a variety of heuristics. These suggestsions tend to be wildly conservative.
+
+The problem is twofold. Within-group sample sizes tend to be small. And the sample variance itself has a very large variance. 
+
+```{r, fig.width=3, fig.align='center'}
+data_frame(x = 0:60/25) %>% 
+  mutate(chisq_9 = dchisq(x*9, 9)) %>% 
+  ggplot(aes(x=x, y=chisq_9)) + geom_line() + ggtitle("sample variance n=10")
+```
+
+## Levene's test
+
+Not in the book! And must be done on a computer. 
+
+$$H_0: \sigma^2_1 = \cdots = \sigma^2_k$$
+versus at least two are unequal.
+
+\pause The form of the test is exactly an ANOVA, but not on the original $y_ij$. Instead, it is on the \textit{absolute differences from the group medians}:
+$$Z_{ij} = |y_{ij} - \tilde{y}_i|$$
+where $\tilde{y}_i$ is the sample median of the $i^{th}$ group.
+
+\pause Plugging the $Z_{ij}$ into the ANOVA formulae gives an approximate $F_{k-1,N-k}$ distribution.
+
+## Levene's test example - yeast
+
+```{r}
+library(car)
+yeast %>% 
+  leveneTest(Activation.Times ~ Recipe, data = .)
+```
+
+## tougher example
+
+From textbook question 25.18 "School System". 15 schools selected. 8 students per school.
+
+```{r, fig.width=4, fig.align='center'}
+school <- read_csv("School_system.csv")
+school %>% 
+  ggplot(aes(x=School, y=Scores)) + geom_boxplot()
+```
+
+## tougher example - Levene
+
+```{r}
+school %>% leveneTest(Scores ~ factor(School), data = .)
+```
+
+## normality assumption
+
+Technically, all the groups have to be normal. But the samples sizes are usually too small.
+
+\pause If the equal variance assumption has been satisfied (do that first), then the method is to pool all the \textit{residuals} together:
+$$ y_{ij} - \overline{y}_i$$
+and look at a normal quantile plot. 
+
+## normal assumption verification examples
+
+```{r}
+library(broom)
+p1 <- yeast %>% 
+  aov(Activation.Times ~ Recipe, data = .) %>% augment %>% ggplot(aes(sample=.resid)) + 
+  geom_qq() + ggtitle("yeast")
+p2 <- frisbee %>% 
+  aov(Distance ~ Grip, data = .) %>% augment %>% ggplot(aes(sample=.resid)) + 
+  geom_qq()+ ggtitle("frisbee")
+multiplot(p1,p2, cols=2) 
+```
+
+## pairwise comparisons
+
+The ANOVA $F$-test is an "omnibus" test---it tells you if there are *any* differences, without giving information about where the differences might be.
+
+\pause If the ANOVA $F$-test is large, there are no differences between groups of any kind, in which case what follows does not apply.
+
+\pause Sometimes one or more *pairwise* differences might be conceived of *in advance of collecting the data.*
+
+\pause Or, there may be some differences between groups that are noticed after collecting data, which is gets us into dangerous territory!
+
+\pause The approach in any case will be to perform multiple pooled two-sample $t$ procedures, using the overall $MSE$ in place of the usual pooled variance:
+$$\frac{\overline{y}_i - \overline{y}_j}{\sqrt{MSE}\sqrt{\frac{1}{n_i} + \frac{1}{n_j}}} \sim t_{N-k}$$
+The usual technique is to produce confidence intervals for each desired pair. But at what confidence level? The usual 95\% level leads to a problem...
+
+
+
